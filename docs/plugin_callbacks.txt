@@ -1,0 +1,25 @@
+List of current plugin callback triggers. WIP.
+
+
+server_worlds_add_client		            	- worlds,client,world
+server_worlds_add_client			            - worlds,client,world
+server_worlds_add_world			                - worlds,world)
+server_worlds_remove_world			            - worlds,world)
+server_add_client_networking_early			    - client)
+ignore_send = server_packet_receive			    - raw_data)
+ignore_handler = server_got_client_packet   	- packet)
+server_client_connected			                - client)
+server_networking_init_early			        - self)
+server_networking_init			                - self)
+server_broadcast_global			                - msg, exclude)
+server_broadcast_world			                - msg, target_world, exclude)
+server_commands_help			                - self,world
+server_periodic_update			                - dt
+server_loaded_world			                    - loaded_world
+server_init_early			                    - self
+server_init			                            - self
+server_client_handle_position_orientation		- self
+ignore = server_client_set_block		    	- self, packet.x,packet.y,packet.z, block_type
+plugin_handled = server_command			        - self, cmd, args
+server_send_chat_message			            - self, chat_msg, origin_player_id
+server_change_world			                    - self, new_world

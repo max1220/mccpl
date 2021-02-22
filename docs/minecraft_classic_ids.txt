@@ -1,0 +1,33 @@
+  1 stone		- #858585
+  2 grass		- #5E8F33
+  3 dirt		- #876042
+  4 cobblestone		- #989898
+  5 wood		- #B99660
+  6 sappling		-
+  7 bedrock		-
+  8 water		- 
+  9 still water		-
+ 10 lava		-
+ 11 still lava		-
+ 12 sand		- #DBD59E
+ 13 gravel		- #817F7F
+ 17 log			- #5E4B1E
+ 18 leaves		- #307810
+ 19 sponge		- #CECE46
+ 20 glass		-
+ 21 red			-
+ ..
+ 26 white
+ 37 yellow flower
+ 38 red flower
+ 39 brown mushroom
+ 40 red mushroom
+ 41 gold		- #FEF854
+ 42 iron		- #E3E3E3
+ 43 fullslab
+ 44 halfslab
+ 45 brick
+ 46 TNT
+ 47 bookshelf
+ 48 mossy cobblestone
+ 49 obsidian		- #1F192C
