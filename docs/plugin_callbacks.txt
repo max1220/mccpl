@@ -1,25 +1,56 @@
-List of current plugin callback triggers. WIP.
+# server plugin callbacks
+
+## A list of tables, describing the plugin triggers supported by the server.
+
+*The plugin triggers and interfaces provided to them are not yet stable!*
+
+Some source code reading might be required, thankfully the plugin API is dead simple,
+and the tables contain the files and line numbers where the callbacks are triggered.
+These tables(especially the line numbers) might not always be up to date.
+You can use grep -r to find all server plugin callbacks. Look for """
 
 
-server_worlds_add_client		            	- worlds,client,world
-server_worlds_add_client			            - worlds,client,world
-server_worlds_add_world			                - worlds,world)
-server_worlds_remove_world			            - worlds,world)
-server_add_client_networking_early			    - client)
-ignore_send = server_packet_receive			    - raw_data)
-ignore_handler = server_got_client_packet   	- packet)
-server_client_connected			                - client)
-server_networking_init_early			        - self)
-server_networking_init			                - self)
-server_broadcast_global			                - msg, exclude)
-server_broadcast_world			                - msg, target_world, exclude)
-server_commands_help			                - self,world
-server_periodic_update			                - dt
-server_loaded_world			                    - loaded_world
-server_init_early			                    - self
-server_init			                            - self
-server_client_handle_position_orientation		- self
-ignore = server_client_set_block		    	- self, packet.x,packet.y,packet.z, block_type
-plugin_handled = server_command			        - self, cmd, args
-server_send_chat_message			            - self, chat_msg, origin_player_id
-server_change_world			                    - self, new_world
+## Worlds
+These plugins are called in the server worlds list "server/worlds.lua".
+"self" refers to the loaded "worlds" instance on the server.
+
+server_worlds_set_default_world							(self) [line 12]
+local ignore_add_client = server_worlds_add_client		(self,client,target_world) [line 18]
+server_worlds_add_client								(self,client,client_world) [line 49]
+server_worlds_add_world									(self,world) [line 78]
+server_worlds_remove_world								(self,world) [line 94]
+
+
+## Networking
+
+server/networking.lua:17:    plugins:trigger_callback("server_add_client_networking_early", client)
+server/networking.lua:21:        local ignore_send = plugins:trigger_callback_unpack("server_packet_receive", raw_data)
+server/networking.lua:74:        local ignore_handler = plugins:trigger_callback("server_got_client_packet", packet)
+server/networking.lua:104:    plugins:trigger_callback("server_client_connected", client)
+server/networking.lua:109:    plugins:trigger_callback("server_networking_init_early", self)
+server/networking.lua:120:    plugins:trigger_callback("server_networking_init", self)
+server/networking.lua:125:    plugins:trigger_callback("server_broadcast_global", msg, exclude)
+server/networking.lua:140:    plugins:trigger_callback("server_broadcast_world", msg, target_world, exclude)
+
+
+## Commands
+
+server/commands.lua:200:    plugins:trigger_callback("server_commands_help", self,world)
+
+
+## Server
+
+server/main.lua:31:        plugins:trigger_callback("server_periodic_update", dt)
+server/main.lua:41:    plugins:trigger_callback("server_loaded_world", loaded_world)
+server/main.lua:53:    plugins:trigger_callback("server_init_early", self)
+server/main.lua:73:    plugins:trigger_callback("server_init", self)
+
+
+# Clients
+
+server/clients.lua:71:		local ignore_identification = plugins:trigger_callback("server_handle_identification", self, self.username, self.key)
+server/clients.lua:115:        plugins:trigger_callback("server_client_handle_position_orientation", self)
+server/clients.lua:126:        local ignore_set_block = plugins:trigger_callback_unpack("server_client_set_block", self, packet.x,packet.y,packet.z, block_type)
+server/clients.lua:151:            local plugin_handled_command = plugins:trigger_callback_unpack("server_command", self, cmd, args)
+server/clients.lua:174:        plugins:trigger_callback("server_send_chat_message", self, chat_msg, origin_player_id)
+server/clients.lua:272:		local ignore_change_world = plugins:trigger_callback("server_change_world", self, new_world)

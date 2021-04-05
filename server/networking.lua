@@ -15,7 +15,7 @@ local networking = {
 function networking:add_client_networking(client, con)
     client.con = con
     plugins:trigger_callback("server_add_client_networking_early", client)
-    
+
     -- send the raw string to the client
     function client:send(raw_data)
         local ignore_send = plugins:trigger_callback_unpack("server_packet_receive", raw_data)
@@ -24,17 +24,17 @@ function networking:add_client_networking(client, con)
         end
         return copas.send(self.con, raw_data)
     end
-    
+
     -- send a package specified by the packed_id and packet_data table
     function client:send_packet(packet_id, packet_data)
         return self:send(protocol_utils.encode_by_id(packet_id, packet_data or {}))
     end
-    
+
     -- read a raw string of len bytes from the connection
     function client:read(len)
         return copas.receive(self.con, len) -- returns data, or nil,error
     end
-    
+
     -- read next byte from the socket, and return as a number(0-255, packet_id),
 	function client:read_packet_id()
 		local packet_id,err = copas.receive(self.con, 1)
@@ -48,7 +48,7 @@ function networking:add_client_networking(client, con)
 	function client:read_packet_data(packet_len)
 		return assert(copas.receive(self.con, packet_len))
 	end
-    
+
     -- this is the main client update function. Here packets are decoded, and callbacks are fired.
     -- it should always be called in a connection handler coroutine, and regularity call copas receive/send/sleep functions.
     function client:update()
@@ -71,7 +71,7 @@ function networking:add_client_networking(client, con)
         assert(packet.type)
         self.server.log("debug3", "Got packet:", packet.type)
 
-        local ignore_handler = plugins:trigger_callback("server_got_client_packet", packet)
+        local ignore_handler = plugins:trigger_callback_unpack("server_got_client_packet", packet)
         if ignore_handler then
             return -- ingore the default packet handler by returning early
         end
@@ -85,7 +85,7 @@ function networking:add_client_networking(client, con)
             self:send(protocol_utils.encode_by_id(resp_packet_id, resp_packet_data))
         end
     end
-    
+
     -- this function is called in the connection handler coroutine once the connection and client have been setup.
     -- it is running the client update function in a loop, to continously decode packets and trigger client callbacks.
     function client:run_loop()
@@ -109,7 +109,7 @@ function networking:start(server)
     plugins:trigger_callback("server_networking_init_early", self)
     self.server = server
     self.server_con = socket.bind(self.server.config.address, self.server.config.port)
-    
+
     -- add copas new connection handler
 	copas.addserver(self.server_con, function(con)
         local client = self.clients:new(self.server)
@@ -138,6 +138,10 @@ end
 -- send data to all players on target_world
 function networking:broadcast_world(msg, target_world, exclude)
     plugins:trigger_callback("server_broadcast_world", msg, target_world, exclude)
+    if not target_world.clients then
+        self.server.log("warning", "World has no clients table on Broadcast!!!")
+        return
+    end
 	for _, client in ipairs(target_world.clients) do
 		if client ~= exclude then
 			client:send(msg)

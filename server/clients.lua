@@ -9,6 +9,10 @@ local clients = {
 }
 
 
+local function trim(str)
+	return str:match("^%s*(.-)%s*$")
+end
+
 -- add a new client to the server clients list
 function clients:add(client)
     assert(client)
@@ -30,9 +34,13 @@ function clients:remove(remove_client)
     if not found_client then
         return
     end
-    found_client:send_despawn()
-    found_client.server.worlds:remove_client(found_client, found_client.world)
+
+	-- leave the current world(sends despawn to other players etc.)
+    found_client.server.worlds:remove_client_world(found_client)
+
+	-- remove from clients list
 	table.remove(clients, found_client_i)
+
 	return true
 end
 
@@ -49,7 +57,7 @@ function clients:new(server)
 
 	-- store reference to server
 	client.server = server
-    
+
     local log,logf = server.log, server.logf
 
     -- the functions client:send() and client:send_packet() are addeded to the client in server/networking.lua
@@ -59,25 +67,38 @@ function clients:new(server)
 	function client:handle_identification(packet)
 		self.username = protocol_utils.destring64(packet.user_or_server_name)
 		self.key = protocol_utils.destring64(packet.motd_or_key)
-        
+
 		-- TODO: authentication!
 
 		log("notice", "Player connected:", self.username, self.player_id, self.con:getpeername())
+
+		local ignore_identification = plugins:trigger_callback_unpack("server_handle_identification", self, self.username, self.key)
+		if ignore_identification then
+			return -- Plugin handles the initial setup(authentication, sending default world, etc.)
+		end
 
 		-- send server info
 		self:send_identification()
 
 		-- load initial world
-		self:change_world(self.server.worlds[self.server.config.default_world])
+		local initial_world = self.server.worlds[self.server.config.default_world]
+		self:change_world(initial_world)
 
 		-- send welcome message
-        self:send_chat_message(self.server.config.welcome_msg)
+		if type(self.server.config.welcome_msg) == "table" then
+			for _,line in ipairs(self.server.config.welcome_msg) do
+				self:send_chat_message(line)
+			end
+		else
+			self:send_chat_message(self.server.config.welcome_msg)
+		end
+
 	end
 
     -- callback for a position/orientation packet from the client.
     -- update internal player position, broadcast new player position to all players on this players world
 	function client:handle_position_orientation(packet)
-		-- update position/rotation        
+		-- update position/rotation
 		self.pos[1] = packet.x/32
 		self.pos[2] = packet.y/32
 		self.pos[3] = packet.z/32
@@ -106,11 +127,11 @@ function clients:new(server)
 		-- determine new block type for the specified position
 		local block_type = (packet.mode == 0x01) and packet.block_type or 0
 		log("debug3", "handle_set_block_client",packet.x,packet.y,packet.z, block_type)
-        local ignore = plugins:trigger_callback_unpack("server_client_set_block", self, packet.x,packet.y,packet.z, block_type)
-        if ignore then
+        local ignore_set_block = plugins:trigger_callback_unpack("server_client_set_block", self, packet.x,packet.y,packet.z, block_type)
+        if ignore_set_block then
             return
         end
-        
+
 		self.world:set_block(packet.x,packet.y,packet.z, block_type)
 
 		-- send block change to everyone on the world, except self(client assumes always success)
@@ -127,12 +148,23 @@ function clients:new(server)
 	function client:handle_message(packet)
 		local message = protocol_utils.destring64(packet.message)
 
+		local plugin_handled_message = plugins:trigger_callback_unpack("server_raw_message", self, message, packet)
+		if plugin_handled_message then
+			-- a plugin has handled this message early, don't broadcast chat message or handle command.
+			-- this affects the server_command for other plugins!
+			return
+		end
+
 		if message:sub(1,1) == "/" then
             -- server command
 			local cmd, args = message:match("^/(%S+)(.*)$")
-			logf("command", ("[%s]: %s%s"):format(self.username, cmd, args))
-            local plugin_handled = plugins:trigger_callback_unpack("server_command", self, cmd, args)
-            if plugin_handled then
+			cmd, args = trim(cmd), trim(args)
+			logf("command", ("[%s]: %s %s"):format(self.username, cmd, args))
+			if args == "" then
+				args = nil
+			end
+            local plugin_handled_command = plugins:trigger_callback_unpack("server_command", self, cmd, args)
+            if plugin_handled_command then
                 return -- a plugin has handled this command, don't call default handlers
             end
 			if commands[cmd] then
@@ -171,10 +203,10 @@ function clients:new(server)
 		})
 	end
 
-    -- send the specified world data to the client
-	function client:send_world(world)
-        world = assert(world or self.world)
-		local compressed,uncompressed = world:compress()
+    -- send the clients loaded world to the client
+	function client:send_world()
+		assert(self.world)
+		local compressed,uncompressed = self.world:compress()
 		logf("debug", "Sending world to player (uncompressed: %d, compressed: %d)...", #uncompressed, #compressed)
 
         -- send level_initialize, to signal that we're ready to send world data
@@ -194,13 +226,20 @@ function clients:new(server)
 
         -- send level_finalize with the world dimensions
 		self:send_packet(packets.level_finalize, {
-			x_size = world.width,
-			y_size = world.height,
-			z_size = world.depth,
+			x_size = self.world.width,
+			y_size = self.world.height,
+			z_size = self.world.depth,
 		})
 	end
 
-    -- send the spawn packet to the clients 
+	-- send a reply to a command.
+	-- TODO: Split on /n and send multiple messages if needed!
+	function client:send_command_reply(str)
+		self.server.logf("command", ("[%s]> %s"):format(client.username, str))
+		self:send_chat_message(">"..str, -1)
+	end
+
+    -- send the spawn packet to the clients
 	function client:send_player_spawn()
         -- inform this client about the spawn
 		self:send_packet(packets.spawn_player, {
@@ -212,7 +251,7 @@ function clients:new(server)
 			yaw = 0,
 			pitch = 0,
 		})
-    
+
         -- send spawn packet for other connected players on this world
         self.server.networking:broadcast_packet_world(packets.spawn_player, {
 			player_id = self.player_id,
@@ -245,31 +284,20 @@ function clients:new(server)
     -- broadcast a packet informing all players on this players world about this player despawning
 	function client:send_despawn(player_id)
 		player_id = player_id or self.player_id
-        self.server.networking:broadcast_packet_world(packets.despawn_player, {player_id = client.player_id}, self.world, self)
+        self.server.networking:broadcast_packet_world(packets.despawn_player, {player_id = player_id}, self.world, self)
 	end
 
     -- change the world this player is currently connected to
 	function client:change_world(new_world)
 		assert(new_world)
 
-        -- unload old world first
-        if self.world then
-			self.server.worlds:remove_client(self, self.world)
+		local ignore_change_world = plugins:trigger_callback_unpack("server_change_world", self, new_world)
+		if ignore_change_world then
+			return
 		end
 
-        self.server.worlds:add_client(self, new_world)
-        self.world = new_world
-
-		-- send world data
-		self:send_world(new_world)
-
-		-- send spawn point to player, notify other players on the world
-		self:send_player_spawn()
-
-		-- send list of players on this world
-		self:send_players()
-        
-        plugins:trigger_callback("server_change_world", self, new_world)
+        -- leave the current world, and join new_world
+        self.server.worlds:move_client(self, new_world)
 	end
 
 	return client

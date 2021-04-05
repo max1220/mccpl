@@ -27,11 +27,26 @@ You can start the server by using:
 Edit the server config in server/config.
 
 
+## Plugins
+
+### Note! Not all plugin callbacks are properly documented yet, documentation might be out of date!
+
+If you want to write a plugin, you should start by reading the example plugin
+source code and the comments at the top of the plugin library source
+in `common/plugins.lua`.
+
+Because there is currently no stable API, expect the Plugin API documentation to
+be out of date.
+You can search the source code for `plugins:trigger_callback(` and `plugins:trigger_callback_unpack(` to see what callbacks are supported and how
+they are called.
+
 
 # TODO
 
-You should also use grep to find more TODO's
+You should also use grep TODO find more TODO's, e.g.:
+`rgrep --color=always -H -n TODO`.
+This list is just the "major topics".
 
 TODO: Re-add world generator
 TODO: Re-add clients
-TODO: Write documentation
+TODO: Write Plugin documentation

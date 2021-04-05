@@ -16,6 +16,9 @@ local server = {
 local log, logf = log_utils:new_logger(server.config.log)
 server.log, server.logf = log,logf
 server.worlds.log, server.worlds.logf = log,logf
+plugins.log,plugins.logf = log, logf
+plugins.base_name = "mccpl.plugins."
+plugins.disable_pcall = false
 
 -- periodically called to update the world. currently only meassures delta-time(dt)
 -- TODO: Implement tick-dependent block updates like water/lava
@@ -46,18 +49,21 @@ function server:start()
     -- load plugins
     assert(not plugins.server)
     plugins.server = self -- provide reference to server instance to plugins
-    plugins.log,plugins.logf = self.log, self.logf
     for _, plugin_name in ipairs(self.config.plugins) do
         plugins:load_plugin(plugin_name)
     end
     plugins:trigger_callback("server_init_early", self)
-    
+
     -- load all configured worlds
 	for _, world_name in ipairs(self.config.worlds) do
         local loaded_world = self:add_world_from_name(world_name)
 		logf("notice","Loaded world %s: %dx%dx%d", world_name, loaded_world.width, loaded_world.height, loaded_world.depth )
 	end
-    
+
+	-- set default world
+	local default_world = assert(self.worlds[self.config.default_world])
+	self.worlds:set_default_world(default_world)
+
     -- start tick update coroutine
     -- TODO: Add in worlds maybe?
     copas.addthread(function()
@@ -67,7 +73,7 @@ function server:start()
     -- start listening on port, register connection handler, create clients on connect
     self.networking:start(self)
     plugins:trigger_callback("server_init", self)
-    
+
     -- enter copas event loop
     log("notice", "Server ready.")
 	copas.loop()
